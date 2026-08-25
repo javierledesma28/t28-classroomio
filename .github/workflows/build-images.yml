@@ -8,27 +8,45 @@
 #
 # El fork es PÚBLICO —obligación de la AGPL, no una preferencia— y en repos
 # públicos `ubuntu-latest` da 4 vCPU / 16 GB y los minutos son gratis y sin
-# medir. Son las mismas condiciones en que upstream construye estas imágenes
-# hoy. En un repo privado el mismo runner da 2 vCPU / 7 GB, que es el techo del
-# VPS: ahí no entraba, y de ahí venía el bloqueo. Ver PLAN.md §1.
+# medir. En un repo privado el mismo runner da 2 vCPU / 7 GB, que es el techo
+# del VPS: ahí no entraba, y de ahí venía el bloqueo.
 #
-# ─── Cuatro decisiones que no son obvias ────────────────────────────────────
+# ✅ **Verificado el 25-ago:** el build del dashboard —el pesado— completa en
+# **206 s** en este runner, y la aserción de salida de upstream
+# (`test -f apps/dashboard/build/index.js`) pasa. El «~8 GB» que bloqueó esto
+# durante días era la bandera `--max-old-space-size=8072`, un techo concedido al
+# heap, no lo que el build consume.
+#
+# ─── Un solo job por imagen, y por qué ──────────────────────────────────────
+#
+# La primera versión de este archivo copiaba la estructura de upstream: un job
+# que construye y prueba, y otro que construye de nuevo y publica. Eso son DOS
+# builds del dashboard por corrida. Upstream lo paga porque separa permisos
+# entre jobs; acá no hace falta.
+#
+# Un solo job construye con `load`, prueba el arranque y publica reusando la
+# caché del mismo builder — el segundo `build-push-action` solo exporta capas.
+#
+# ⚠ Y ahí estuvo el bug que hizo fallar la primera corrida: el job de prueba
+# llevaba `cache-to: type=registry` sin `packages: write` ni login, así que
+# exportar la caché daba **403** y se caía el build entero. Upstream usa
+# `cache-from` **solo** en su job de prueba, justamente por eso. Con un job
+# único con permisos, las dos direcciones de caché son legítimas.
+#
+# ─── Tres decisiones más ────────────────────────────────────────────────────
 #
 # 1 · NO hay tag `latest`. Es el que se mueve bajo los pies, y el propio
 #     SELF_HOST.md de upstream advierte de eso. El VPS pinnea `sha-<7>`.
 #
 # 2 · Solo `linux/amd64`. Upstream publica multi-arch con QEMU porque su
-#     público es cualquiera; el nuestro es un VPS x86 concreto. Construir arm64
-#     por emulación multiplica el tiempo del build —el más caro es justo el del
-#     dashboard— para una plataforma que nadie va a usar. Si algún día hace
-#     falta, se agrega a `platforms`.
+#     público es cualquiera; el nuestro es un VPS x86 concreto. Emular arm64
+#     multiplicaría el build más caro para una plataforma que nadie va a usar.
 #
-# 3 · El smoke test corre ANTES de publicar. Se copia de upstream por una
-#     razón: una imagen que compila y no bootea es peor que un build que falla,
-#     porque llega al registro y alguien la despliega.
-#
-# 4 · La caché va al propio GHCR (`type=registry`). Sin ella, cada corrida
-#     recompila el dashboard entero.
+# 3 · **Sin filtro `paths:`.** Upstream lo usa para no reconstruir en commits de
+#     documentación. No se copia a propósito: un filtro que no dispara es
+#     silencioso, y este proyecto ya se comió varias veces el fallo de «no hizo
+#     nada y pareció exitoso». Minutos gratis, build de 3 minutos: no vale el
+#     riesgo.
 #
 # ─── Lo que este workflow NO hace ───────────────────────────────────────────
 #
@@ -42,8 +60,11 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-  # Para poder construir a demanda sin ensuciar la historia con commits vacíos.
   workflow_dispatch:
+
+concurrency:
+  group: imagenes-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRO: ghcr.io
@@ -51,12 +72,14 @@ env:
   NAMESPACE: ${{ github.repository }}
 
 jobs:
-  # ───────────────────────────────────────────────────────────────────────────
-  # 1 · Construir y probar que arranca, sin publicar todavía.
-  # ───────────────────────────────────────────────────────────────────────────
-  humo:
-    name: Arranca (${{ matrix.nombre }})
+  imagen:
+    name: ${{ matrix.nombre }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lo que habilita empujar imágenes y caché a GHCR con el GITHUB_TOKEN de
+      # la corrida: no hace falta crear ni rotar un PAT.
+      packages: write
     strategy:
       # Sin fail-fast: si el dashboard falla, igual quiero saber si api y jobs
       # están bien. Con fail-fast cancelaría los otros dos y perdería el dato.
@@ -70,66 +93,27 @@ jobs:
           - nombre: jobs
             dockerfile: ./docker/Dockerfile.jobs
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      # Se carga local (`load: true`) en vez de publicar: la idea es tener la
-      # imagen acá para arrancarla antes de que salga del runner.
-      - name: Construir ${{ matrix.nombre }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          load: true
-          tags: t28-cio-${{ matrix.nombre }}:prueba
-          platforms: linux/amd64
-          cache-from: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache
-          # `mode=max` cachea también las capas intermedias, que es lo que hace
-          # que el build del dashboard no arranque de cero cada vez.
-          cache-to: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache,mode=max
-
-      # Arranca el contenedor y verifica que no se muera solo. No hay base de
-      # datos acá, así que no se puede pedir mucho más: lo que se descarta es el
-      # fallo que importa —una imagen que ni bootea— y nada más. La verificación
-      # de verdad es la del VPS después del `pull` (PLAN.md §5).
-      - name: Verificar que bootea
-        run: |
-          docker run -d --name humo t28-cio-${{ matrix.nombre }}:prueba || true
-          sleep 15
-          estado=$(docker inspect -f '{{.State.Status}}' humo 2>/dev/null || echo ausente)
-          echo "estado: $estado"
-          if [ "$estado" = "running" ]; then
-            echo "  ✓ ${{ matrix.nombre }} sigue arriba a los 15 s"
-          else
-            echo "  ✗ ${{ matrix.nombre }} no quedó corriendo — log:"
-            docker logs humo 2>&1 | tail -40
-            exit 1
-          fi
-
-  # ───────────────────────────────────────────────────────────────────────────
-  # 2 · Publicar, solo si las tres arrancaron.
-  # ───────────────────────────────────────────────────────────────────────────
-  publicar:
-    name: Publicar (${{ matrix.nombre }})
-    needs: humo
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # Lo que habilita empujar a GHCR con el GITHUB_TOKEN de la corrida: no
-      # hace falta crear ni rotar un PAT.
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - nombre: api
-            dockerfile: ./docker/Dockerfile.api
-          - nombre: dashboard
-            dockerfile: ./docker/Dockerfile.dashboard
-          - nombre: jobs
-            dockerfile: ./docker/Dockerfile.jobs
+    # El smoke test de upstream (`docker/smoke-test.sh`) corre contra una base
+    # efímera: el de `api` ejercita las migraciones, el de `jobs` espera a que
+    # los workers reporten, y el de `dashboard` acepta cualquier respuesta que
+    # no sea 5xx. Son mucho mejores que «¿sigue vivo a los 15 s?».
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: classroomio
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -156,7 +140,29 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Construir y publicar ${{ matrix.nombre }}
+      # Se carga local para poder arrancarla acá antes de que salga del runner.
+      # `mode=max` cachea también las capas intermedias, que es lo que hace que
+      # el build del dashboard no arranque de cero en cada corrida.
+      - name: Construir ${{ matrix.nombre }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: t28-cio-${{ matrix.nombre }}:prueba
+          platforms: linux/amd64
+          cache-from: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache,mode=max
+
+      # Script de upstream, sin modificar. Una imagen que compila y no bootea es
+      # peor que un build que falla, porque llega al registro y alguien la
+      # despliega.
+      - name: Probar que arranca
+        run: bash docker/smoke-test.sh ${{ matrix.nombre }} t28-cio-${{ matrix.nombre }}:prueba
+
+      # Reusa la caché del builder que ya corrió arriba: esto solo exporta capas
+      # al registro, no reconstruye.
+      - name: Publicar ${{ matrix.nombre }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -166,11 +172,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
           cache-from: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache,mode=max
 
-      # Deja en el resumen de la corrida la línea exacta para pegar en el
-      # compose del VPS. Sin esto hay que ir a buscar el sha a mano, que es
-      # donde se cuela el error de pinnear una imagen distinta a la probada.
+      # Deja en el resumen de la corrida la línea exacta para pegar en el compose
+      # del VPS. Sin esto hay que ir a buscar el sha a mano, que es donde se
+      # cuela el error de pinnear una imagen distinta a la probada.
       - name: Qué pinnear en el VPS
         run: |
           {
