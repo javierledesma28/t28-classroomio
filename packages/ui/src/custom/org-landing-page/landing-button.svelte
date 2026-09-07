@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { safeHref } from './safe-href';
 
   type Variant = 'primary' | 'secondary' | 'tertiary';
   type Size = 'sm' | 'md' | 'lg';
@@ -51,7 +52,7 @@
 </script>
 
 {#if href && !disabled}
-  <a {href} class={finalClass} aria-label={ariaLabel} {onclick}>
+  <a href={safeHref(href)} class={finalClass} aria-label={ariaLabel} {onclick}>
     {@render children()}
   </a>
 {:else}

@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 import { blockedSubdomain } from '@cio/utils/constants';
+import { containsDisallowedHrefs } from '../shared';
 
 export const ZGetOrganizations = z.object({
   siteName: z.string().min(1).optional(),
@@ -97,7 +98,12 @@ export const ZUpdateOrganization = z.object({
     .optional(),
   avatarUrl: z.url().optional(),
   theme: z.string().optional(),
-  landingpage: z.record(z.string(), z.unknown()).optional(),
+  landingpage: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .refine((val) => !val || !containsDisallowedHrefs(val), {
+      message: 'URLs with javascript:, data:, or vbscript: schemes are not allowed'
+    }),
   siteName: z.string().min(1).optional(),
   customDomain: z.string().nullable().optional(),
   isCustomDomainVerified: z.boolean().optional(),
