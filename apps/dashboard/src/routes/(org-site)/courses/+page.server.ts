@@ -2,6 +2,7 @@ import type { MetaTagsProps } from 'svelte-meta-tags';
 import { classroomio, type InferResponseType } from '$lib/utils/services/api';
 import { safeServerApi } from '$lib/utils/services/api/server';
 import { redirect } from '@sveltejs/kit';
+import { mapPublicCoursesToLandingPageCourses } from '$features/org/utils/landing-page';
 
 type GetPublicCoursesRequest = typeof classroomio.organization.courses.public.$get;
 type GetPublicCoursesSuccess = Extract<InferResponseType<GetPublicCoursesRequest>, { success: true }>;
@@ -97,7 +98,7 @@ export const load = async ({ parent, url }) => {
 
   return {
     org,
-    courses: courseData.courses,
+    courses: mapPublicCoursesToLandingPageCourses(courseData.courses),
     tagGroups: tagsResult.ok ? tagsResult.body.data : [],
     activeTags: normalizedTags,
     activeTypes: normalizedTypes,
