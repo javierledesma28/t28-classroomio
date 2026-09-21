@@ -122,7 +122,7 @@ export const organizationRouter = new Hono()
   /**
    * GET /organization/team
    * Gets organization team members (non-students)
-   * Requires authentication
+   * Requires organization admin access
    */
   /**
    * POST /organization/auto-enroll-student
@@ -146,7 +146,7 @@ export const organizationRouter = new Hono()
       return handleError(c, error, 'Failed to auto-enroll student');
     }
   })
-  .get('/team', authMiddleware, orgTeamMemberMiddleware, async (c) => {
+  .get('/team', authMiddleware, orgAdminMiddleware, async (c) => {
     try {
       const orgId = c.req.header('cio-org-id')!;
       const team = await getOrgTeam(orgId);
@@ -255,9 +255,9 @@ export const organizationRouter = new Hono()
   /**
    * GET /organization/audience
    * Gets organization audience (students)
-   * Requires authentication
+   * Requires organization admin access
    */
-  .get('/audience', authMiddleware, orgTeamMemberMiddleware, zValidator('query', ZGetAudienceQuery), async (c) => {
+  .get('/audience', authMiddleware, orgAdminMiddleware, zValidator('query', ZGetAudienceQuery), async (c) => {
     try {
       const orgId = c.req.header('cio-org-id')!;
       const query = c.req.valid('query');
@@ -710,7 +710,7 @@ export const organizationRouter = new Hono()
   .post(
     '/audience/import',
     authMiddleware,
-    orgTeamMemberMiddleware,
+    orgAdminMiddleware,
     zValidator('json', ZImportAudienceMembers),
     async (c) => {
       try {
@@ -740,7 +740,7 @@ export const organizationRouter = new Hono()
   .post(
     '/audience/assign-courses',
     authMiddleware,
-    orgTeamMemberMiddleware,
+    orgAdminMiddleware,
     zValidator('json', ZAssignAudienceCourses),
     async (c) => {
       try {
