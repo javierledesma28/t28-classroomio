@@ -13,10 +13,6 @@ const audienceMocks = vi.hoisted(() => ({
   importAudienceMembers: vi.fn()
 }));
 
-const audienceExportMocks = vi.hoisted(() => ({
-  getAudienceExportRows: vi.fn()
-}));
-
 vi.mock('@api/middlewares/auth', () => ({
   authMiddleware: async (context: Context, next: Next) => {
     const roleId = Number(context.req.header('x-test-role'));
@@ -37,9 +33,7 @@ vi.mock('@api/middlewares/org-member-or-automation-key', () => ({
 }));
 vi.mock('@api/services/organization', () => serviceMocks);
 vi.mock('@api/services/organization/audience', () => audienceMocks);
-vi.mock('@api/services/organization/audience-export', () => audienceExportMocks);
 vi.mock('@api/services/organization/automation-usage', () => ({}));
-vi.mock('@api/services/organization/auto-join', () => ({}));
 vi.mock('@api/services/organization/invite', () => ({}));
 vi.mock('@api/services/exercise', () => ({}));
 vi.mock('@api/routes/organization/assets', () => ({ assetsRouter: new Hono() }));
@@ -79,7 +73,8 @@ const audienceMutationRequests = [
   },
   {
     path: '/audience/import',
-    body: JSON.stringify({ recipients: [{ email: 'ada@example.com' }] }),
+    // v1.0.0 takes a CSV string (`recipientCsv`), not upstream's `recipients` list.
+    body: JSON.stringify({ recipientCsv: 'ada@example.com' }),
     adminStatus: 201
   }
 ];
@@ -89,7 +84,6 @@ describe('organization roster authorization', () => {
     vi.clearAllMocks();
     serviceMocks.getOrgTeam.mockResolvedValue([]);
     serviceMocks.getOrgAudience.mockResolvedValue({ items: [], pagination: {}, query: {} });
-    audienceExportMocks.getAudienceExportRows.mockResolvedValue([]);
     audienceMocks.assignAudienceToCourses.mockResolvedValue({ enrolled: 1 });
     audienceMocks.importAudienceMembers.mockResolvedValue({ imported: 1 });
   });
@@ -102,18 +96,6 @@ describe('organization roster authorization', () => {
 
   it.each(['/team', '/audience'])('allows admins to GET %s', async (path) => {
     const response = await rosterRequest(path, ROLE.ADMIN);
-
-    expect(response.status).toBe(200);
-  });
-
-  it('rejects tutors from GET /audience/export', async () => {
-    const response = await rosterRequest('/audience/export', ROLE.TUTOR);
-
-    expect(response.status).toBe(403);
-  });
-
-  it('allows admins to GET /audience/export', async () => {
-    const response = await rosterRequest('/audience/export', ROLE.ADMIN);
 
     expect(response.status).toBe(200);
   });
