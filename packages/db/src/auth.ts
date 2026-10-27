@@ -36,6 +36,11 @@ function buildOAuthProxyPlugin() {
   return [oAuthProxy({ productionURL: CONSTANTS.BASE_URL })];
 }
 
+// The annotation keeps the public type the same one it was on better-auth 1.4.
+// Without it tsc cannot name an internal @better-auth/core type (TS2742).
+// Since 1.7, customSession's getSession endpoint type no longer matches the
+// generic Auth (it has no operationId), so the cast is needed. Only the type
+// changes; runtime behavior does not.
 export const auth: ReturnType<typeof betterAuth> = betterAuth({
   baseURL: CONSTANTS.BASE_URL,
   database: drizzleAdapter(db, {
@@ -146,4 +151,4 @@ export const auth: ReturnType<typeof betterAuth> = betterAuth({
       return { user, session, orgRoles };
     })
   ]
-});
+}) as unknown as ReturnType<typeof betterAuth>;

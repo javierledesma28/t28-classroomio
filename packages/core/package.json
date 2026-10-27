@@ -46,7 +46,7 @@
     "@cio/utils": "workspace:*",
     "ai": "^6.0.158",
     "axios": "^1.4.0",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.4",
     "ioredis": "^5.4.1",
     "isomorphic-dompurify": "^3.7.1",
     "jszip": "^3.10.1",
