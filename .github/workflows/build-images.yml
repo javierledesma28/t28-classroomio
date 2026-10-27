@@ -154,7 +154,9 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRO }}/${{ env.NAMESPACE }}/${{ matrix.nombre }}:buildcache,mode=max
 
-      # Script de upstream, sin modificar. Una imagen que compila y no bootea es
+      # Script de upstream, con un solo cambio: el caso `jobs` migra la base
+      # efímera antes de arrancar (cada job de la matriz tiene la suya, y sin
+      # migrar los workers nunca reportan listos). Una imagen que compila y no bootea es
       # peor que un build que falla, porque llega al registro y alguien la
       # despliega.
       - name: Probar que arranca

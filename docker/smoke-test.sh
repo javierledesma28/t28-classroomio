@@ -49,6 +49,12 @@ case "${SERVICE}" in
     ;;
 
   jobs)
+    # The api smoke runs in its own job with its own empty DB, so nobody has migrated
+    # this one: the workers boot, query analytics_page_event and never report ready.
+    # Migrate first with the same image (it ships @cio/db and its db:setup script).
+    docker run --rm --network host -e DATABASE_URL="${DB_URL}" "${IMAGE}" \
+      pnpm --filter @cio/db db:setup \
+      || { echo "SMOKE FAIL (jobs): db:setup failed against the ephemeral DB"; exit 1; }
     docker run -d --name "${NAME}" --network host \
       -e NODE_ENV=production -e DATABASE_URL="${DB_URL}" -e REDIS_URL="${REDIS_URL}" \
       "${IMAGE}"
