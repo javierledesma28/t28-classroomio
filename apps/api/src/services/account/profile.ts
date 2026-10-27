@@ -1,14 +1,8 @@
 import { AppError, ErrorCodes } from '@api/utils/errors';
-import {
-  createOrganizationMember,
-  getFirstOrganization,
-  getOrganizationByProfileId,
-  hasOrgMemberByProfileIdOrEmail
-} from '@cio/db/queries/organization';
+import { ensureSelfHostedStudentMembership, getOrganizationByProfileId } from '@cio/db/queries/organization';
 import { getProfileByEmail, getProfileById, updateProfile } from '@cio/db/queries/auth';
 
 import type { OrganizationWithMemberAndPlans } from '@cio/db/queries/organization/types';
-import { ROLE } from '@cio/utils/constants';
 import type { TProfile } from '@cio/db/types';
 import { env } from '@cio/core/config/env';
 import { getLicenseStatus } from '@api/services/license';
@@ -40,20 +34,15 @@ export async function getAccountData(userId: string): Promise<GetAccountDataResu
 
   // Self-hosted: auto-add user as student to the single org if they are not a member.
   // Skip if they already have membership (by profileId) or a pending invite (by email).
-  if (env.PUBLIC_IS_SELFHOSTED === 'true' && organizations.length === 0) {
-    const firstOrg = await getFirstOrganization();
-    if (firstOrg) {
-      const alreadyInOrg = await hasOrgMemberByProfileIdOrEmail(firstOrg.id, userId, profile.email ?? undefined);
+  // Only while the install has exactly ONE org (upstream #965): with several,
+  // "the first one" is an arbitrary tenant and nobody asked to join it.
+  if (isSelfHosted && organizations.length === 0) {
+    const membershipEnsured = await ensureSelfHostedStudentMembership({
+      profileId: userId,
+      email: profile.email
+    });
 
-      if (!alreadyInOrg) {
-        await createOrganizationMember({
-          organizationId: firstOrg.id,
-          profileId: userId,
-          roleId: ROLE.STUDENT,
-          verified: true
-        });
-      }
-
+    if (membershipEnsured) {
       organizations = await getOrganizationByProfileId(userId);
     }
   }
