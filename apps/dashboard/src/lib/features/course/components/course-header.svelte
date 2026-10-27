@@ -22,6 +22,7 @@
   import CourseContextMenuContent from './course-context-menu-content.svelte';
   import ViewAsStudentModal from './view-as-student-modal.svelte';
   import ViewCourseSiteUnpublishedModal from './view-course-site-unpublished-modal.svelte';
+  import VistaEstudianteSwitch from '$features/ui/vista-estudiante-switch.svelte';
 
   const siteName = $derived($currentOrg.siteName);
   const showCoursePublishBadge = $derived(!$isStudentExperience);
@@ -84,6 +85,8 @@
     </div>
 
     <span class="grow"></span>
+
+    <VistaEstudianteSwitch />
 
     <Button
       size="sm"

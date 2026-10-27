@@ -3,6 +3,7 @@ import { derived, writable } from 'svelte/store';
 
 import { PUBLIC_IS_SELFHOSTED } from '$env/static/public';
 import { ROLE } from '@cio/utils/constants';
+import { rolPuedePrevisualizar, vistaEstudiante } from './vista-estudiante';
 
 export const globalStore = writable<{
   isDark: boolean;
@@ -14,8 +15,13 @@ export const globalStore = writable<{
   orgSiteName: ''
 });
 
-export const isOrgStudent = derived(currentOrg, ($currentOrg) => {
+// T28: con «Ver como estudiante» encendido, un admin o tutor cuenta como
+// estudiante en toda la interfaz — redirecciones, candados de lección y
+// botones de edición incluidos. El rol real queda en `currentOrg.roleId`.
+export const isOrgStudent = derived([currentOrg, vistaEstudiante], ([$currentOrg, $vista]) => {
   if ($currentOrg.roleId === 0) return null;
+
+  if ($vista && rolPuedePrevisualizar($currentOrg.roleId)) return true;
 
   return $currentOrg.roleId === ROLE.STUDENT;
 });

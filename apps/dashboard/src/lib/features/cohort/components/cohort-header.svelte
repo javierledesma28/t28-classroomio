@@ -2,6 +2,7 @@
   import { Separator } from '@cio/ui/base/separator';
   import * as Sidebar from '@cio/ui/base/sidebar';
   import { cohortApi } from '../api';
+  import VistaEstudianteSwitch from '$features/ui/vista-estudiante-switch.svelte';
 </script>
 
 <header
@@ -21,5 +22,7 @@
     </div>
 
     <span class="grow"></span>
+
+    <VistaEstudianteSwitch />
   </div>
 </header>

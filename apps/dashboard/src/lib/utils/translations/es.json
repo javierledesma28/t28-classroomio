@@ -4798,5 +4798,12 @@
         "cancel": "Cancelar"
       }
     }
+  },
+  "t28": {
+    "vista_estudiante": {
+      "ver": "Ver como estudiante",
+      "volver_admin": "Volver a administrador",
+      "volver_tutor": "Volver a tutor"
+    }
   }
 }

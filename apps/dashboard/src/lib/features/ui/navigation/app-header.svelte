@@ -12,6 +12,7 @@
   import { setupProgressApi } from '$features/setup/api/setup-progress.svelte';
   import AppSetup from './app-setup.svelte';
   import VisitOrgSiteBtn from '$features/ui/visit-org-site-btn.svelte';
+  import VistaEstudianteSwitch from '$features/ui/vista-estudiante-switch.svelte';
 
   const siteName = $derived($currentOrg.siteName);
 
@@ -37,6 +38,7 @@
     <span class="grow"></span>
 
     <AppSetup />
+    <VistaEstudianteSwitch />
     <VisitOrgSiteBtn variant="outline" labelKey="dashboard.open_academy" />
 
     <Search />

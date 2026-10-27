@@ -8,6 +8,7 @@
   import LmsBreadcrumbs from './lms-breadcrumbs.svelte';
   import RefreshCcwIcon from '@lucide/svelte/icons/refresh-ccw';
   import * as Empty from '@cio/ui/base/empty';
+  import VistaEstudianteSwitch from '../vista-estudiante-switch.svelte';
 
   interface Props {
     hideSearch?: boolean;
@@ -29,6 +30,8 @@
     <LmsBreadcrumbs />
 
     <span class="grow"></span>
+
+    <VistaEstudianteSwitch />
 
     {#if !hideSearch}
       <Search scope="lms" />

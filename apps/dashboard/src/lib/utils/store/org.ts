@@ -9,6 +9,7 @@ import { PUBLIC_IS_SELFHOSTED } from '$env/static/public';
 import { ROLE, TENANT_ROOT_DOMAIN } from '@cio/utils/constants';
 import { STEPS } from '../constants/quiz';
 import type { Writable } from 'svelte/store';
+import { rolPuedePrevisualizar, vistaEstudiante } from './vista-estudiante';
 
 /** Deep-merge with this when hydrating an org from the API so nested `customization` keys stay stable. */
 export const DEFAULT_ORG_CUSTOMIZATION = {
@@ -62,8 +63,13 @@ export const isPrimaryWorkspace = derived(
   ($currentOrg) => Boolean($currentOrg.id) && !$currentOrg.parentOrganizationId
 );
 export const orgTeam = writable<OrgTeamMember[]>([]);
-export const isOrgAdmin = derived(currentOrg, ($currentOrg) => {
+// T28: previsualizando como estudiante, el admin deja de serlo en la interfaz.
+// Si no, conservaría los atajos de admin (entrar a una formación sin estar
+// inscripto, borrar preguntas ajenas del foro) y la vista no sería fiel.
+export const isOrgAdmin = derived([currentOrg, vistaEstudiante], ([$currentOrg, $vista]) => {
   if ($currentOrg.roleId === 0) return null;
+
+  if ($vista && rolPuedePrevisualizar($currentOrg.roleId)) return false;
 
   return $currentOrg.roleId === ROLE.ADMIN;
 });

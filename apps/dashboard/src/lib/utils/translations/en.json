@@ -4788,5 +4788,12 @@
         "no_deadline": "No deadline"
       }
     }
+  },
+  "t28": {
+    "vista_estudiante": {
+      "ver": "View as student",
+      "volver_admin": "Back to admin",
+      "volver_tutor": "Back to tutor"
+    }
   }
 }
